@@ -1,12 +1,8 @@
 srpm-modules:
-if CONFIG_KERNEL
 	$(MAKE) $(AM_MAKEFLAGS) pkg="${PACKAGE}-modules" srpm-common
-endif
 
 srpm-utils:
-if CONFIG_USER
 	$(MAKE) $(AM_MAKEFLAGS) pkg="${PACKAGE}" srpm-common
-endif
 
 srpm: srpm-modules srpm-utils
 
@@ -16,14 +12,12 @@ if CONFIG_KERNEL
 endif
 
 rpm-modules: srpm-modules
-if CONFIG_KERNEL
 	$(MAKE) $(AM_MAKEFLAGS) pkg="${PACKAGE}-modules" rpm-common
-endif
 
 rpm-utils: srpm-utils
-if CONFIG_USER
 	$(MAKE) $(AM_MAKEFLAGS) pkg="${PACKAGE}" rpm-common
-endif
+
+rpm-modules: srpm-modules
 
 rpm: rpm-modules rpm-utils rpm-dkms
 
