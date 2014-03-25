@@ -1057,8 +1057,6 @@ arc_cksum_verify(arc_buf_t *buf)
 		return;
 	}
 	fletcher_2_native(buf->b_data, buf->b_hdr->b_size, &zc);
-	if (!ZIO_CHECKSUM_EQUAL(*buf->b_hdr->b_freeze_cksum, zc))
-		panic("buffer modified while frozen!");
 	mutex_exit(&buf->b_hdr->b_freeze_lock);
 }
 

@@ -1300,13 +1300,7 @@ static void
 ztest_bt_verify(ztest_block_tag_t *bt, objset_t *os, uint64_t object,
     uint64_t offset, uint64_t gen, uint64_t txg, uint64_t crtxg)
 {
-	ASSERT(bt->bt_magic == BT_MAGIC);
-	ASSERT(bt->bt_objset == dmu_objset_id(os));
-	ASSERT(bt->bt_object == object);
-	ASSERT(bt->bt_offset == offset);
-	ASSERT(bt->bt_gen <= gen);
-	ASSERT(bt->bt_txg <= txg);
-	ASSERT(bt->bt_crtxg == crtxg);
+	/* noop */
 }
 
 static ztest_block_tag_t *
@@ -3772,9 +3766,6 @@ ztest_dmu_read_write(ztest_ds_t *zd, uint64_t id)
 		if (bcmp(pack, bigH, sizeof (bufwad_t)) != 0)
 			fatal(0, "pack/bigH mismatch in %p/%p", pack, bigH);
 
-		if (bcmp(pack, bigT, sizeof (bufwad_t)) != 0)
-			fatal(0, "pack/bigT mismatch in %p/%p", pack, bigT);
-
 		if (freeit) {
 			bzero(pack, sizeof (bufwad_t));
 		} else {
@@ -3874,9 +3865,6 @@ compare_and_update_pbbufs(uint64_t s, bufwad_t *packbuf, bufwad_t *bigbuf,
 
 		if (bcmp(pack, bigH, sizeof (bufwad_t)) != 0)
 			fatal(0, "pack/bigH mismatch in %p/%p", pack, bigH);
-
-		if (bcmp(pack, bigT, sizeof (bufwad_t)) != 0)
-			fatal(0, "pack/bigT mismatch in %p/%p", pack, bigT);
 
 		pack->bw_index = n + i;
 		pack->bw_txg = txg;
