@@ -519,6 +519,7 @@ zil_alloc_lwb(zilog_t *zilog, blkptr_t *bp, boolean_t slog, uint64_t txg,
 	ASSERT(!MUTEX_HELD(&lwb->lwb_vdev_lock));
 	ASSERT(avl_is_empty(&lwb->lwb_vdev_tree));
 	ASSERT(list_is_empty(&lwb->lwb_waiters));
+	ASSERT(list_is_empty(&lwb->lwb_itxs));
 
 	return (lwb);
 }
@@ -526,6 +527,8 @@ zil_alloc_lwb(zilog_t *zilog, blkptr_t *bp, boolean_t slog, uint64_t txg,
 static void
 zil_free_lwb(zilog_t *zilog, lwb_t *lwb)
 {
+	itx_t *itx;
+
 	ASSERT(MUTEX_HELD(&zilog->zl_lock));
 	ASSERT(!MUTEX_HELD(&lwb->lwb_vdev_lock));
 	ASSERT(list_is_empty(&lwb->lwb_waiters));
@@ -538,6 +541,13 @@ zil_free_lwb(zilog_t *zilog, lwb_t *lwb)
 		while ((zv = avl_destroy_nodes(t, &cookie)) != NULL)
 			kmem_free(zv, sizeof (*zv));
 
+		while ((itx = list_head(&lwb->lwb_itxs))) {
+			if (itx->itx_callback != NULL)
+				itx->itx_callback(itx->itx_callback_data);
+			list_remove(&zilog->zl_itx_commit_list, itx);
+			zil_itx_destroy(itx);
+		}
+
 		ASSERT3P(lwb->lwb_root_zio, !=, NULL);
 		ASSERT3P(lwb->lwb_write_zio, !=, NULL);
 
@@ -548,6 +558,7 @@ zil_free_lwb(zilog_t *zilog, lwb_t *lwb)
 		lwb->lwb_write_zio = NULL;
 	} else {
 		ASSERT3S(lwb->lwb_state, !=, LWB_STATE_ISSUED);
+		ASSERT(list_is_empty(&lwb->lwb_itxs));
 	}
 
 	ASSERT(avl_is_empty(&lwb->lwb_vdev_tree));
@@ -982,6 +993,7 @@ zil_lwb_flush_vdevs_done(zio_t *zio)
 	zilog_t *zilog = lwb->lwb_zilog;
 	dmu_tx_t *tx = lwb->lwb_tx;
 	zil_commit_waiter_t *zcw;
+	itx_t *itx;
 
 	spa_config_exit(zilog->zl_spa, SCL_STATE, lwb);
 
@@ -1014,6 +1026,14 @@ zil_lwb_flush_vdevs_done(zio_t *zio)
 		 * it got the whole log chain.
 		 */
 		zilog->zl_commit_lr_seq = zilog->zl_lr_seq;
+	}
+
+	while ((itx = list_head(&lwb->lwb_itxs))) {
+		if (itx->itx_callback != NULL)
+			itx->itx_callback(itx->itx_callback_data);
+
+		list_remove(&zilog->zl_itx_commit_list, itx);
+		zil_itx_destroy(itx);
 	}
 
 	while ((zcw = list_head(&lwb->lwb_waiters)) != NULL) {
@@ -1513,6 +1533,7 @@ zil_itx_create(uint64_t txtype, size_t lrsize)
 void
 zil_itx_destroy(itx_t *itx)
 {
+	IMPLY(itx->itx_lr.lrc_txtype == TX_COMMIT, itx->itx_callback == NULL);
 	zio_data_buf_free(itx, offsetof(itx_t, itx_lr)+itx->itx_lr.lrc_reclen);
 }
 
@@ -1953,6 +1974,7 @@ static void
 zil_process_commit_list(zilog_t *zilog)
 {
 	spa_t *spa = zilog->zl_spa;
+	list_t nolwb_itxs;
 	list_t nolwb_waiters;
 	lwb_t *lwb;
 	itx_t *itx;
@@ -1966,6 +1988,7 @@ zil_process_commit_list(zilog_t *zilog)
 	if (list_head(&zilog->zl_itx_commit_list) == NULL)
 		return;
 
+	list_create(&nolwb_itxs, sizeof (itx_t), offsetof(itx_t, itx_node));
 	list_create(&nolwb_waiters, sizeof (zil_commit_waiter_t),
 	    offsetof(zil_commit_waiter_t, zcw_node));
 
@@ -1977,8 +2000,7 @@ zil_process_commit_list(zilog_t *zilog)
 		ASSERT3S(lwb->lwb_state, !=, LWB_STATE_DONE);
 	}
 
-	for (itx = list_head(&zilog->zl_itx_commit_list); itx != NULL;
-	    itx = list_next(&zilog->zl_itx_commit_list, itx)) {
+	while ((itx = list_head(&zilog->zl_itx_commit_list))) {
 		lr_t *lrc = &itx->itx_lr;
 		uint64_t txg = lrc->lrc_txg;
 
@@ -1992,6 +2014,8 @@ zil_process_commit_list(zilog_t *zilog)
 			    zilog_t *, zilog, itx_t *, itx);
 		}
 
+		list_remove(&zilog->zl_itx_commit_list, itx);
+
 		/*
 		 * This is inherently racy and may result in us writing
 		 * out a log block for a txg that was just synced. This
@@ -2004,11 +2028,24 @@ zil_process_commit_list(zilog_t *zilog)
 		if (!synced || frozen) {
 			if (lwb != NULL) {
 				lwb = zil_lwb_commit(zilog, itx, lwb);
+
+				/*
+				 * TODO: comments
+				 */
+				if (lwb == NULL)
+					list_insert_tail(&nolwb_itxs, itx);
+				else
+					list_insert_tail(&lwb->lwb_itxs, itx);
 			} else if (lrc->lrc_txtype == TX_COMMIT) {
 				ASSERT3P(lwb, ==, NULL);
 				zil_commit_waiter_link_nolwb(
 				    itx->itx_private, &nolwb_waiters);
+				zil_itx_destroy(itx);
+			} else {
+				ASSERT3P(lwb, ==, NULL);
+				list_insert_tail(&nolwb_itxs, itx);
 			}
+
 		} else if (lrc->lrc_txtype == TX_COMMIT) {
 			ASSERT3B(synced, ==, B_TRUE);
 			ASSERT3B(frozen, ==, B_FALSE);
@@ -2026,12 +2063,6 @@ zil_process_commit_list(zilog_t *zilog)
 			 */
 			zil_commit_waiter_skip(itx->itx_private);
 		}
-
-		if (itx->itx_callback != NULL)
-			itx->itx_callback(itx->itx_callback_data);
-
-		list_remove(&zilog->zl_itx_commit_list, itx);
-		zil_itx_destroy(itx);
 	}
 
 	if (lwb == NULL) {
@@ -2042,6 +2073,16 @@ zil_process_commit_list(zilog_t *zilog)
 		 * zil_commit_writer_stall() for more details.
 		 */
 		zil_commit_writer_stall(zilog);
+
+		/*
+		 * TODO: comments
+		 */
+		while ((itx = list_head(&nolwb_itxs))) {
+			if (itx->itx_callback != NULL)
+				itx->itx_callback(itx->itx_callback_data);
+			list_remove(&nolwb_itxs, itx);
+			zil_itx_destroy(itx);
+		}
 
 		/*
 		 * Additionally, we have to signal and mark the "nolwb"
@@ -2711,6 +2752,7 @@ static int
 zil_lwb_cons(void *vbuf, void *unused, int kmflag)
 {
 	lwb_t *lwb = vbuf;
+	list_create(&lwb->lwb_itxs, sizeof (itx_t), offsetof(itx_t, itx_node));
 	list_create(&lwb->lwb_waiters, sizeof (zil_commit_waiter_t),
 	    offsetof(zil_commit_waiter_t, zcw_node));
 	avl_create(&lwb->lwb_vdev_tree, zil_lwb_vdev_compare,
@@ -2727,6 +2769,7 @@ zil_lwb_dest(void *vbuf, void *unused)
 	mutex_destroy(&lwb->lwb_vdev_lock);
 	avl_destroy(&lwb->lwb_vdev_tree);
 	list_destroy(&lwb->lwb_waiters);
+	list_destroy(&lwb->lwb_itxs);
 }
 
 void
