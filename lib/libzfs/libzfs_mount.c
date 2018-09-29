@@ -1437,13 +1437,17 @@ zpool_disable_datasets(zpool_handle_t *zhp, boolean_t force)
 	 */
 	for (i = 0; i < used; i++) {
 		zfs_share_proto_t *curr_proto;
+		verify(sharetab_lock() == 0);
 		for (curr_proto = share_all_proto; *curr_proto != PROTO_END;
 		    curr_proto++) {
 			if (is_shared(hdl, mountpoints[i], *curr_proto) &&
 			    unshare_one(hdl, mountpoints[i],
-			    mountpoints[i], *curr_proto) != 0)
+			    mountpoints[i], *curr_proto) != 0) {
+				verify(sharetab_unlock() == 0);
 				goto out;
+			}
 		}
+		verify(sharetab_unlock() == 0);
 	}
 
 	/*
