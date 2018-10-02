@@ -800,6 +800,9 @@ zfs_init_libshare(libzfs_handle_t *zhandle, int service)
 {
 	int ret = SA_OK;
 
+	VERIFY(zhandle != NULL);
+	zhandle->libzfs_shareflags |= ZFSSHARE_MISS;
+
 	if (ret == SA_OK && zhandle->libzfs_shareflags & ZFSSHARE_MISS) {
 		/*
 		 * We had a cache miss. Most likely it is a new ZFS
