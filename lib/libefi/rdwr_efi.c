@@ -1166,6 +1166,15 @@ efi_use_whole_disk(int fd)
 	if (data_start + data_size != limit || resv_start != limit)
 		sync_needed = B_TRUE;
 
+	(void) fprintf(stderr, "limit: %lli\n", limit);
+	(void) fprintf(stderr, "resv_start: %lli\n", resv_start);
+	(void) fprintf(stderr, "data_start: %lli\n", data_start);
+	(void) fprintf(stderr, "data_size: %lli\n", data_size);
+	(void) fprintf(stderr, "efi_last_u_lba: %lli\n", efi_label->efi_last_u_lba);
+	(void) fprintf(stderr, "efi_last_lba: %lli\n", efi_label->efi_last_lba);
+	(void) fprintf(stderr, "efi_altern_lba: %lli\n", efi_label->efi_altern_lba);
+	(void) fprintf(stderr, "EFI_MIN_RESV_SIZE: %i\n", EFI_MIN_RESV_SIZE);
+
 	if (efi_debug && sync_needed)
 		(void) fprintf(stderr, "efi_use_whole_disk: sync needed\n");
 
