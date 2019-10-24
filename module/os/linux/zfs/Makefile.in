@@ -13,7 +13,6 @@ $(MODULE)-objs += ../os/linux/zfs/abd.o
 $(MODULE)-objs += ../os/linux/zfs/arc_os.o
 $(MODULE)-objs += ../os/linux/zfs/mmp_os.o
 $(MODULE)-objs += ../os/linux/zfs/policy.o
-$(MODULE)-objs += ../os/linux/zfs/trace.o
 $(MODULE)-objs += ../os/linux/zfs/qat.o
 $(MODULE)-objs += ../os/linux/zfs/qat_compress.o
 $(MODULE)-objs += ../os/linux/zfs/qat_crypt.o
