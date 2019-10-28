@@ -23,11 +23,11 @@ kprobe:trace_zfs_taskq_ent__start
         @start[@tq_name[tid], @tqent_id[tid]] = nsecs;
 }
 
-kprobe:trace_zfs_taskq_ent__finish
+kprobe:trace_zfs_taskq_ent__start
 / @birth[@tq_name[tid], @tqent_id[tid]] /
 {
         @queue_lat_us[@tq_name[tid]] =
-                hist((nsecs - @birth[@tq_name[tid], @tqent_id[tid]]));
+                hist((nsecs - @birth[@tq_name[tid], @tqent_id[tid]])/1000);
         delete(@birth[@tq_name[tid], @tqent_id[tid]]);
 }
 
@@ -37,7 +37,7 @@ kprobe:trace_zfs_taskq_ent__finish
         $tqent = (struct taskq_ent *)arg0;
 
         @exec_lat_us[@tq_name[tid], ksym($tqent->tqent_func)] =
-                hist((nsecs - @start[@tq_name[tid], @tqent_id[tid]]));
+                hist((nsecs - @start[@tq_name[tid], @tqent_id[tid]])/1000);
         delete(@start[@tq_name[tid], @tqent_id[tid]]);
 }
 
@@ -61,7 +61,4 @@ KVER=$(uname -r)
 bpftrace \
         --include "/usr/src/zfs-$KVER/zfs_config.h" \
         -I "/usr/src/zfs-$KVER/include" \
-        -I "/usr/src/zfs-$KVER/include/os/linux/kernel" \
-        -I "/usr/src/zfs-$KVER/include/os/linux/spl" \
-        -I "/usr/src/zfs-$KVER/include/os/linux/zfs" \
         -e "$PROGRAM"
