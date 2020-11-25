@@ -1695,7 +1695,8 @@ dsl_redaction_list_traverse(redaction_list_t *rl, zbookmark_phys_t *resume,
 			break;
 
 		if (cmp0 > 0)
-			maxbufid = midbufid - 1;
+			maxbufid =
+			    (midbufid == minbufid ? minbufid : midbufid - 1);
 		else if (cmpn < 0)
 			minbufid = midbufid + 1;
 		else
