@@ -6,6 +6,8 @@ use std::mem::size_of;
 use nix::errno::Errno;
 use nix::ioctl_readwrite_bad;
 use nix::libc::c_int;
+use nix::unistd::Gid;
+use nix::unistd::Group;
 use nix::unistd::Uid;
 use nix::unistd::User;
 
@@ -94,24 +96,39 @@ pub struct UserAcct {
     pub space: u64,
 }
 
-impl UserAcct {
-    fn user(uid: Uid) -> Option<String> {
-        Some(User::from_uid(uid).ok()??.name)
-    }
+pub enum NameType {
+    User,
+    Group,
+    Project,
+}
 
+impl UserAcct {
     // XXX assumes it's a uid (not gid/project)
-    pub fn print(&self, id_to_name: bool, nicenum: bool) -> String {
+    pub fn name_string(&self, name_type: NameType, id_to_name: bool) -> String {
+        fn user(uid: Uid) -> Option<String> {
+            Some(User::from_uid(uid).ok()??.name)
+        }
+        fn group(gid: Gid) -> Option<String> {
+            Some(Group::from_gid(gid).ok()??.name)
+        }
         if self.domain.is_empty() {
             if id_to_name {
-                let user =
-                    Self::user(Uid::from_raw(self.rid)).unwrap_or_else(|| format!("{}", self.rid));
-                format!("{}: {}", user, self.space)
+                match name_type {
+                    NameType::User => {
+                        user(Uid::from_raw(self.rid)).unwrap_or_else(|| format!("{}", self.rid))
+                    }
+                    NameType::Group => {
+                        group(Gid::from_raw(self.rid)).unwrap_or_else(|| format!("{}", self.rid))
+                    }
+                    NameType::Project => todo!(),
+                }
             } else {
-                format!("{}: {}", self.rid, self.space)
+                format!("{}", self.rid)
             }
         } else {
             // SMB
-            format!("{}-{}: {}", self.domain, self.rid, self.space)
+            // XXX translate to string name
+            format!("{}-{}", self.domain, self.rid)
         }
     }
 }
@@ -144,6 +161,25 @@ pub enum UserQuotaProp {
     ProjectQuota,
     ProjectObjUsed,
     ProjectObjQuota,
+}
+
+impl UserQuotaProp {
+    pub fn name_type(&self) -> NameType {
+        match self {
+            UserQuotaProp::UserUsed
+            | UserQuotaProp::UserQuota
+            | UserQuotaProp::UserObjUsed
+            | UserQuotaProp::UserObjQuota => NameType::User,
+            UserQuotaProp::GroupUsed
+            | UserQuotaProp::GroupQuota
+            | UserQuotaProp::GroupObjUsed
+            | UserQuotaProp::GroupObjQuota => NameType::Group,
+            UserQuotaProp::ProjectUsed
+            | UserQuotaProp::ProjectQuota
+            | UserQuotaProp::ProjectObjUsed
+            | UserQuotaProp::ProjectObjQuota => NameType::Project,
+        }
+    }
 }
 
 ioctl_readwrite_bad!(zfs_ioc_userspace_many, ZFS_IOC_USERSPACE_MANY, zfs_cmd_t);

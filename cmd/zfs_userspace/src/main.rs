@@ -4,7 +4,7 @@ use clap::Parser;
 use std::io::Write;
 use std::{fs::File, os::fd::AsRawFd};
 
-use crate::zfsioctl::zfs_userspace;
+use crate::zfsioctl::{zfs_userspace, UserQuotaProp};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -39,16 +39,15 @@ fn main() -> std::io::Result<()> {
 
     println!("Hello, world!");
 
-    for useracct in zfs_userspace(
-        _file.as_raw_fd(),
-        &_args.dataset,
-        zfsioctl::UserQuotaProp::UserUsed,
-    ) {
+    let prop = UserQuotaProp::UserUsed;
+
+    for useracct in zfs_userspace(_file.as_raw_fd(), &_args.dataset, prop) {
         //writeln!(std::io::stdout(), "{useracct:?}")?;
         writeln!(
             std::io::stdout(),
-            "{}",
-            useracct.print(!_args.prtnum, !_args.parseable)
+            "{}: {}",
+            useracct.name_string(prop.name_type(), !_args.prtnum),
+            useracct.space,
         )?;
     }
 
