@@ -10,9 +10,11 @@ use nix::unistd::Gid;
 use nix::unistd::Group;
 use nix::unistd::Uid;
 use nix::unistd::User;
+use nvpair::NvList;
 
 const MAXPATHLEN: usize = 4096;
 const MAXNAMELEN: usize = 256;
+const ZFS_IOC_POOL_CONFIGS: usize = 0x5a04;
 const ZFS_IOC_USERSPACE_MANY: usize = 0x5a2e;
 
 #[derive(Debug, Clone)]
@@ -173,6 +175,7 @@ impl UserQuotaProp {
 }
 
 ioctl_readwrite_bad!(zfs_ioc_userspace_many, ZFS_IOC_USERSPACE_MANY, zfs_cmd_t);
+ioctl_readwrite_bad!(zfs_ioc_pool_configs, ZFS_IOC_POOL_CONFIGS, zfs_cmd_t);
 
 /// Get the user/group/project space accounting associated with the specified dataset.  If an error
 /// is encountered, the returned iterator will terminate.
@@ -213,6 +216,59 @@ pub fn zfs_userspace(
         Some(iter)
     });
     x.flatten()
+}
+
+#[derive(Debug, Clone)]
+pub struct VdevConfig {
+    pub path: String,
+    pub is_log: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PoolConfig {
+    pub name: String,
+    pub guid: u64,
+    pub vdevs: Vec<VdevConfig>,
+}
+
+pub fn zfs_pool_configs(dev_zfs_fd:i32) -> impl Iterator<Item = PoolConfig> {
+    let mut cookie = 0u64;
+    let pools = iter::from_fn(move || {
+        let mut configs = Vec::new();
+        let mut buf = vec![0u8; 256 * 1024]; // see zcmd_alloc_dst_nvlist()
+        let mut cmd = zfs_cmd_t {
+            zc_nvlist_dst: buf.as_ptr() as u64,
+            zc_cookie: cookie,
+            ..Default::default()
+        };
+        cmd.zc_nvlist_dst_size = (buf.len() * size_of::<u8>()) as u64;
+        let res = unsafe { zfs_ioc_pool_configs(dev_zfs_fd, &mut cmd) };
+        cookie = cmd.zc_cookie;
+        if res.is_err() {
+            return None;
+        }
+        if cmd.zc_nvlist_dst_size == 0 {
+            return None;
+        }
+        let dst_nvl = NvList::try_unpack(&buf).unwrap();
+        for config in dst_nvl.into_iter() {
+            let name = config.name().to_string_lossy().to_string();
+            let value = config.data();
+            let v = value.as_list().unwrap();
+            let guid = v.lookup_uint64("pool_guid").unwrap();
+            let mut pool_config = PoolConfig { name , guid, vdevs: Vec::default() };
+            let vdev_tree = v.lookup_nvlist("vdev_tree").unwrap();
+            let children = vdev_tree.lookup_nvlist_array("children").unwrap();
+            for child in children {
+                let path = child.lookup_string("path").unwrap().to_string_lossy().to_string();
+                let is_log = child.lookup_uint64("is_log").unwrap();
+                pool_config.vdevs.push(VdevConfig { path, is_log: (is_log != 0) });
+            }
+            configs.push(pool_config);
+        }
+        Some(configs.into_iter())
+    });
+    pools.flatten()
 }
 
 /*
