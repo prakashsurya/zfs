@@ -44,7 +44,12 @@ fn main() -> std::io::Result<()> {
         &_args.dataset,
         zfsioctl::UserQuotaProp::UserUsed,
     ) {
-        writeln!(std::io::stdout(), "{useracct:?}")?;
+        //writeln!(std::io::stdout(), "{useracct:?}")?;
+        writeln!(
+            std::io::stdout(),
+            "{}",
+            useracct.print(!_args.prtnum, !_args.parseable)
+        )?;
     }
 
     Ok(())

@@ -6,6 +6,8 @@ use std::mem::size_of;
 use nix::errno::Errno;
 use nix::ioctl_readwrite_bad;
 use nix::libc::c_int;
+use nix::unistd::Uid;
+use nix::unistd::User;
 
 const MAXPATHLEN: usize = 4096;
 const MAXNAMELEN: usize = 256;
@@ -90,6 +92,28 @@ pub struct UserAcct {
     pub domain: String,
     pub rid: u32,
     pub space: u64,
+}
+
+impl UserAcct {
+    fn user(uid: Uid) -> Option<String> {
+        Some(User::from_uid(uid).ok()??.name)
+    }
+
+    // XXX assumes it's a uid (not gid/project)
+    pub fn print(&self, id_to_name: bool, nicenum: bool) -> String {
+        if self.domain.is_empty() {
+            if id_to_name {
+                let user =
+                    Self::user(Uid::from_raw(self.rid)).unwrap_or_else(|| format!("{}", self.rid));
+                format!("{}: {}", user, self.space)
+            } else {
+                format!("{}: {}", self.rid, self.space)
+            }
+        } else {
+            // SMB
+            format!("{}-{}: {}", self.domain, self.rid, self.space)
+        }
+    }
 }
 
 impl From<&zfs_useracct_t> for UserAcct {
