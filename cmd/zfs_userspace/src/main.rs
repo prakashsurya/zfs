@@ -22,24 +22,37 @@ enum Command {
     },
 
     UserSpace {
-        #[arg(short = 'n')]
-        prtnum: bool,
+        /// Display numeric uid/gid values instead of names.
+        #[arg(long, short = 'n')]
+        numeric_id: bool,
 
-        #[arg(short = 'H')]
-        scripted: bool,
+        /// Do not print headers, use tab-delimited fields.
+        #[arg(long, short = 'H')]
+        no_headers: bool,
 
-        #[arg(short = 'p')]
+        /// Display values in parsable (exact) values.
+        #[arg(long, short = 'p')]
         parseable: bool,
 
+        /// Display the comma-separated list of fields.
         #[arg(short = 'o')]
-        ofield: Option<String>,
+        fields: Option<String>,
 
-        // TODO: Add '-S' and '-s' for sorting.
+        /// Display the comma-separated list of entity types (from: all,posixuser,smbuser,posixgroup,smbgroup)
         #[arg(short = 't')]
-        tfield: Option<String>,
+        types: Option<String>,
 
-        #[arg(short = 'i')]
-        ifield: bool,
+        /// Translate SID to POSIX uid/gid.
+        #[arg(long, short = 'i')]
+        posix_sid: bool,
+
+        /// Sort by the given field.  May be specified more than once.
+        #[arg(short = 's')]
+        sort: Vec<String>,
+
+        /// Sort by the given field in reverse order.  May be specified more than once.
+        #[arg(short = 'S')]
+        sort_reverse: Vec<String>,
 
         #[arg(index = 1)]
         dataset: String,
@@ -92,13 +105,15 @@ fn main() -> std::io::Result<()> {
             }
         }
         Command::UserSpace {
-            prtnum,
-            scripted,
+            numeric_id,
+            no_headers: scripted,
             parseable,
-            ofield,
-            tfield,
-            ifield,
+            fields,
+            types,
+            posix_sid,
             dataset,
+            sort,
+            sort_reverse,
         } => {
             let prop = UserQuotaProp::UserUsed;
             for useracct in zfs_userspace(_file.as_raw_fd(), &dataset, prop) {
@@ -111,7 +126,7 @@ fn main() -> std::io::Result<()> {
                 writeln!(
                     std::io::stdout(),
                     "{}: {}",
-                    useracct.name_string(prop.name_type(), !prtnum),
+                    useracct.name_string(prop.name_type(), !numeric_id),
                     space,
                 )?;
             }
