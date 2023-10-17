@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use std::io::Write;
 use std::{fs::File, os::fd::AsRawFd};
 
-use crate::zfsioctl::{zfs_userspace, zfs_pool_configs, UserQuotaProp};
+use crate::zfsioctl::{zfs_pool_configs, zfs_userspace, UserQuotaProp};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -14,36 +14,36 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-  Vdevs {
-    pool: Option<String>,
+    Vdevs {
+        pool: Option<String>,
 
-    #[arg(short = 'j')]
-    json: bool,
-  },
+        #[arg(short = 'j')]
+        json: bool,
+    },
 
-  UserSpace {
-    #[arg(short = 'n')]
-    prtnum: bool,
+    UserSpace {
+        #[arg(short = 'n')]
+        prtnum: bool,
 
-    #[arg(short = 'H')]
-    scripted: bool,
+        #[arg(short = 'H')]
+        scripted: bool,
 
-    #[arg(short = 'p')]
-    parseable: bool,
+        #[arg(short = 'p')]
+        parseable: bool,
 
-    #[arg(short = 'o')]
-    ofield: Option<String>,
+        #[arg(short = 'o')]
+        ofield: Option<String>,
 
-    // TODO: Add '-S' and '-s' for sorting.
-    #[arg(short = 't')]
-    tfield: Option<String>,
+        // TODO: Add '-S' and '-s' for sorting.
+        #[arg(short = 't')]
+        tfield: Option<String>,
 
-    #[arg(short = 'i')]
-    ifield: bool,
+        #[arg(short = 'i')]
+        ifield: bool,
 
-    #[arg(index = 1)]
-    dataset: String,
-  },
+        #[arg(index = 1)]
+        dataset: String,
+    },
 }
 
 fn main() -> std::io::Result<()> {
@@ -60,7 +60,7 @@ fn main() -> std::io::Result<()> {
                         true => {
                             let json = serde_json::to_string_pretty(&config.vdevs)?;
                             println!("{json}");
-                        },
+                        }
                         false => {
                             for vdev in config.vdevs {
                                 match vdev.is_log {
@@ -68,7 +68,7 @@ fn main() -> std::io::Result<()> {
                                     false => println!("{}", vdev.path),
                                 }
                             }
-                        },
+                        }
                     }
                 }
             } else {
@@ -77,7 +77,7 @@ fn main() -> std::io::Result<()> {
                         true => {
                             let json = serde_json::to_string_pretty(&config)?;
                             println!("{json}");
-                        },
+                        }
                         false => {
                             println!("{}:", config.name);
                             for vdev in config.vdevs {
@@ -86,12 +86,20 @@ fn main() -> std::io::Result<()> {
                                     false => println!("\t{}", vdev.path),
                                 }
                             }
-                        },
+                        }
                     }
                 }
             }
-        },
-        Command::UserSpace { prtnum, scripted, parseable, ofield, tfield, ifield, dataset } => {
+        }
+        Command::UserSpace {
+            prtnum,
+            scripted,
+            parseable,
+            ofield,
+            tfield,
+            ifield,
+            dataset,
+        } => {
             let prop = UserQuotaProp::UserUsed;
             for useracct in zfs_userspace(_file.as_raw_fd(), &dataset, prop) {
                 //writeln!(std::io::stdout(), "{useracct:?}")?;
@@ -102,7 +110,7 @@ fn main() -> std::io::Result<()> {
                     useracct.space,
                 )?;
             }
-        },
+        }
     }
     Ok(())
 }

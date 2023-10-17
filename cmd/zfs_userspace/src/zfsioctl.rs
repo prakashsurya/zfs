@@ -219,7 +219,6 @@ pub fn zfs_userspace(
     x.flatten()
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VdevConfig {
     pub path: String,
@@ -233,7 +232,7 @@ pub struct PoolConfig {
     pub vdevs: Vec<VdevConfig>,
 }
 
-pub fn zfs_pool_configs(dev_zfs_fd:i32) -> impl Iterator<Item = PoolConfig> {
+pub fn zfs_pool_configs(dev_zfs_fd: i32) -> impl Iterator<Item = PoolConfig> {
     let mut cookie = 0u64;
     let pools = iter::from_fn(move || {
         let mut configs = Vec::new();
@@ -258,13 +257,24 @@ pub fn zfs_pool_configs(dev_zfs_fd:i32) -> impl Iterator<Item = PoolConfig> {
             let value = config.data();
             let v = value.as_list().unwrap();
             let guid = v.lookup_uint64("pool_guid").unwrap();
-            let mut pool_config = PoolConfig { name , guid, vdevs: Vec::default() };
+            let mut pool_config = PoolConfig {
+                name,
+                guid,
+                vdevs: Vec::default(),
+            };
             let vdev_tree = v.lookup_nvlist("vdev_tree").unwrap();
             let children = vdev_tree.lookup_nvlist_array("children").unwrap();
             for child in children {
-                let path = child.lookup_string("path").unwrap().to_string_lossy().to_string();
+                let path = child
+                    .lookup_string("path")
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
                 let is_log = child.lookup_uint64("is_log").unwrap();
-                pool_config.vdevs.push(VdevConfig { path, is_log: (is_log != 0) });
+                pool_config.vdevs.push(VdevConfig {
+                    path,
+                    is_log: (is_log != 0),
+                });
             }
             configs.push(pool_config);
         }
