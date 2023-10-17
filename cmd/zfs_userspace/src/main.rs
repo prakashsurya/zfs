@@ -3,8 +3,14 @@ mod zfsioctl;
 use clap::{Parser, Subcommand};
 use std::io::Write;
 use std::{fs::File, os::fd::AsRawFd};
+use nix::unistd::Uid;
+use nix::unistd::User;
+use strum::IntoEnumIterator;
 
 use crate::zfsioctl::{zfs_pool_configs, zfs_userspace, UserQuotaProp};
+
+use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -62,11 +68,11 @@ enum Command {
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
-    let _file = File::open("/dev/zfs")?;
+    let file = File::open("/dev/zfs")?;
 
     match args.command {
         Command::Vdevs { pool, json } => {
-            let mut pool_configs = zfs_pool_configs(_file.as_raw_fd());
+            let mut pool_configs = zfs_pool_configs(file.as_raw_fd());
             if let Some(p) = pool {
                 if let Some(config) = pool_configs.find(|config| config.name == p) {
                     match json {
@@ -115,22 +121,50 @@ fn main() -> std::io::Result<()> {
             sort,
             sort_reverse,
         } => {
-            let prop = UserQuotaProp::UserUsed;
-            for useracct in zfs_userspace(_file.as_raw_fd(), &dataset, prop) {
-                //writeln!(std::io::stdout(), "{useracct:?}")?;
-                let space = if parseable {
-                    useracct.space.to_string()
-                } else {
-                    format!("{:.1} GB", useracct.space as f64 / 1024.0 / 1024.0 / 1024.0)
+            let mut users: BTreeMap<(String, u32), HashMap<UserQuotaProp, u64>> = BTreeMap::new();
+
+            for prop in UserQuotaProp::iter() {
+                for useracct in zfs_userspace(file.as_raw_fd(), &dataset, prop) {
+                    let user = (useracct.domain, useracct.rid);
+        
+                    match users.get_mut(&user) {
+                        None => {
+                            let mut new = HashMap::new();
+                            new.insert(prop, useracct.space);
+                            users.insert(user, new);
+                        },
+                        Some(x) => {
+                            x.insert(prop, useracct.space);
+                        }
+                    };
+                }
+            }
+        
+            write!(std::io::stdout(), "{:20}", "NAME")?;
+            for prop in UserQuotaProp::iter() {
+                write!(std::io::stdout(), "{:20}", prop.tostr())?;
+            }
+            write!(std::io::stdout(), "\n")?;
+        
+            for ((_domain, rid), props) in users {
+                let user = match numeric_id {
+                    true => rid.to_string(),
+                    false => User::from_uid(Uid::from_raw(rid)).ok().unwrap().unwrap().name
                 };
-                writeln!(
-                    std::io::stdout(),
-                    "{}: {}",
-                    useracct.name_string(prop.name_type(), !numeric_id),
-                    space,
-                )?;
+        
+                write!(std::io::stdout(), "{:20}", user)?;
+        
+                for prop in UserQuotaProp::iter() {
+                    match props.get(&prop) {
+                        None => write!(std::io::stdout(), "{:20}", "-")?,
+                        Some(x) => write!(std::io::stdout(), "{:20}", x.to_string())?,
+                    }
+                }
+        
+                write!(std::io::stdout(), "\n")?;
             }
         }
     }
+
     Ok(())
 }

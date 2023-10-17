@@ -2,6 +2,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::iter;
 use std::mem::size_of;
+use std::fmt;
 
 use nix::errno::Errno;
 use nix::ioctl_readwrite_bad;
@@ -12,6 +13,9 @@ use nix::unistd::Uid;
 use nix::unistd::User;
 use nvpair::NvList;
 use serde::{Deserialize, Serialize};
+
+use strum::EnumIter;
+use strum::Display;
 
 const MAXPATHLEN: usize = 4096;
 const MAXNAMELEN: usize = 256;
@@ -140,37 +144,59 @@ impl From<&zfs_useracct_t> for UserAcct {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, EnumIter, Hash, Eq, PartialEq)]
 pub enum UserQuotaProp {
     UserUsed,
     UserQuota,
-    GroupUsed,
-    GroupQuota,
+    //GroupUsed,
+    //GroupQuota,
     UserObjUsed,
     UserObjQuota,
-    GroupObjUsed,
-    GroupObjQuota,
-    ProjectUsed,
-    ProjectQuota,
-    ProjectObjUsed,
-    ProjectObjQuota,
+    //GroupObjUsed,
+    //GroupObjQuota,
+    //ProjectUsed,
+    //ProjectQuota,
+    //ProjectObjUsed,
+    //ProjectObjQuota,
 }
 
+// impl UserQuotaProp {
+//     pub fn name_type(&self) -> NameType {
+//         match self {
+//             UserQuotaProp::UserUsed
+//             | UserQuotaProp::UserQuota
+//             | UserQuotaProp::UserObjUsed
+//             | UserQuotaProp::UserObjQuota => NameType::User,
+//             UserQuotaProp::GroupUsed
+//             | UserQuotaProp::GroupQuota
+//             | UserQuotaProp::GroupObjUsed
+//             | UserQuotaProp::GroupObjQuota => NameType::Group,
+//             UserQuotaProp::ProjectUsed
+//             | UserQuotaProp::ProjectQuota
+//             | UserQuotaProp::ProjectObjUsed
+//             | UserQuotaProp::ProjectObjQuota => NameType::Project,
+//         }
+//     }
+//}
+
+// impl fmt::Display for UserQuotaProp {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match self {
+//             UserQuotaProp::UserUsed => write!(f, "USED"),
+//             UserQuotaProp::UserQuota => write!(f, "QUOTA"),
+//             UserQuotaProp::UserObjUsed => write!(f, "OBJUSED"),
+//             UserQuotaProp::UserObjQuota => write!(f, "OBJQUOTA"),
+//         }
+//     }
+// }
+
 impl UserQuotaProp {
-    pub fn name_type(&self) -> NameType {
+    pub fn tostr(&self) -> &str {
         match self {
-            UserQuotaProp::UserUsed
-            | UserQuotaProp::UserQuota
-            | UserQuotaProp::UserObjUsed
-            | UserQuotaProp::UserObjQuota => NameType::User,
-            UserQuotaProp::GroupUsed
-            | UserQuotaProp::GroupQuota
-            | UserQuotaProp::GroupObjUsed
-            | UserQuotaProp::GroupObjQuota => NameType::Group,
-            UserQuotaProp::ProjectUsed
-            | UserQuotaProp::ProjectQuota
-            | UserQuotaProp::ProjectObjUsed
-            | UserQuotaProp::ProjectObjQuota => NameType::Project,
+            UserQuotaProp::UserUsed => "USED",
+            UserQuotaProp::UserQuota => "QUOTA",
+            UserQuotaProp::UserObjUsed => "OBJUSED",
+            UserQuotaProp::UserObjQuota => "OBJQUOTA",
         }
     }
 }
