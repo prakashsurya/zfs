@@ -103,25 +103,15 @@ pub enum NameType {
 }
 
 impl UserAcct {
-    // XXX assumes it's a uid (not gid/project)
     pub fn name_string(&self, name_type: NameType, id_to_name: bool) -> String {
-        fn user(uid: Uid) -> Option<String> {
-            Some(User::from_uid(uid).ok()??.name)
-        }
-        fn group(gid: Gid) -> Option<String> {
-            Some(Group::from_gid(gid).ok()??.name)
-        }
         if self.domain.is_empty() {
             if id_to_name {
-                match name_type {
-                    NameType::User => {
-                        user(Uid::from_raw(self.rid)).unwrap_or_else(|| format!("{}", self.rid))
-                    }
-                    NameType::Group => {
-                        group(Gid::from_raw(self.rid)).unwrap_or_else(|| format!("{}", self.rid))
-                    }
-                    NameType::Project => todo!(),
-                }
+                let translate = || match name_type {
+                    NameType::User => Some(User::from_uid(Uid::from_raw(self.rid)).ok()??.name),
+                    NameType::Group => Some(Group::from_gid(Gid::from_raw(self.rid)).ok()??.name),
+                    NameType::Project => None,
+                };
+                translate().unwrap_or_else(|| format!("{}", self.rid))
             } else {
                 format!("{}", self.rid)
             }
