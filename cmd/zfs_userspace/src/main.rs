@@ -1,7 +1,10 @@
 mod zfsioctl;
 
 use clap::Parser;
-use std::fs::File;
+use std::io::Write;
+use std::{fs::File, os::fd::AsRawFd};
+
+use crate::zfsioctl::zfs_userspace;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -18,7 +21,6 @@ struct Args {
     ofield: Option<String>,
 
     // TODO: Add '-S' and '-s' for sorting.
-
     #[arg(short = 't')]
     tfield: Option<String>,
 
@@ -36,6 +38,14 @@ fn main() -> std::io::Result<()> {
     let _file = File::open("/dev/zfs")?;
 
     println!("Hello, world!");
+
+    for useracct in zfs_userspace(
+        _file.as_raw_fd(),
+        &_args.dataset,
+        zfsioctl::UserQuotaProp::UserUsed,
+    ) {
+        writeln!(std::io::stdout(), "{useracct:?}")?;
+    }
 
     Ok(())
 }

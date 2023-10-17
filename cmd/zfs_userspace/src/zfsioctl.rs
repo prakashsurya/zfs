@@ -85,6 +85,7 @@ impl Default for zfs_useracct_t {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct UserAcct {
     pub domain: String,
     pub rid: u32,
@@ -135,18 +136,24 @@ pub fn zfs_userspace(
     prop: UserQuotaProp,
 ) -> impl Iterator<Item = UserAcct> {
     let name = CString::new(dataset).unwrap();
+    let mut cookie = 0u64;
     let x = iter::from_fn(move || {
         // XXX kernel is going to modify buf, need to do some magic unsafe to indicate?
         let mut buf = vec![zfs_useracct_t::default(); 1024];
         let mut cmd = zfs_cmd_t {
-            zc_name: name.as_bytes_with_nul().try_into().unwrap(),
             zc_objset_type: prop as u64,
             zc_nvlist_dst: buf.as_ptr() as u64,
+            zc_cookie: cookie,
             ..Default::default()
         };
+        cmd.zc_name[..name.as_bytes().len()].copy_from_slice(name.as_bytes());
         cmd.zc_nvlist_dst_size = (buf.len() * size_of::<zfs_useracct_t>()) as u64;
         let res = unsafe { zfs_ioc_userspace_many(dev_zfs_fd, &mut cmd) };
+        cookie = cmd.zc_cookie;
         if res.is_err() {
+            return None;
+        }
+        if cmd.zc_nvlist_dst_size == 0 {
             return None;
         }
         let iter = buf
