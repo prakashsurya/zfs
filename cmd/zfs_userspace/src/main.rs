@@ -16,6 +16,9 @@ struct Args {
 enum Command {
   Vdevs {
     pool: Option<String>,
+
+    #[arg(short = 'j')]
+    json: bool,
   },
 
   UserSpace {
@@ -49,15 +52,42 @@ fn main() -> std::io::Result<()> {
     let _file = File::open("/dev/zfs")?;
 
     match args.command {
-        Command::Vdevs { pool } => {
+        Command::Vdevs { pool, json } => {
             let mut pool_configs = zfs_pool_configs(_file.as_raw_fd());
             if let Some(p) = pool {
                 if let Some(config) = pool_configs.find(|config| config.name == p) {
-                    println!("{:?}", config.vdevs);
+                    match json {
+                        true => {
+                            let json = serde_json::to_string_pretty(&config.vdevs)?;
+                            println!("{json}");
+                        },
+                        false => {
+                            for vdev in config.vdevs {
+                                match vdev.is_log {
+                                    true => println!("{} (log)", vdev.path),
+                                    false => println!("{}", vdev.path),
+                                }
+                            }
+                        },
+                    }
                 }
             } else {
                 for config in pool_configs {
-                    println!("{config:?}");
+                    match json {
+                        true => {
+                            let json = serde_json::to_string_pretty(&config)?;
+                            println!("{json}");
+                        },
+                        false => {
+                            println!("{}:", config.name);
+                            for vdev in config.vdevs {
+                                match vdev.is_log {
+                                    true => println!("\t{} (log)", vdev.path),
+                                    false => println!("\t{}", vdev.path),
+                                }
+                            }
+                        },
+                    }
                 }
             }
         },

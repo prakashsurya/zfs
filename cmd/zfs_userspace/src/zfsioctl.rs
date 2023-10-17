@@ -11,6 +11,7 @@ use nix::unistd::Group;
 use nix::unistd::Uid;
 use nix::unistd::User;
 use nvpair::NvList;
+use serde::{Deserialize, Serialize};
 
 const MAXPATHLEN: usize = 4096;
 const MAXNAMELEN: usize = 256;
@@ -218,13 +219,14 @@ pub fn zfs_userspace(
     x.flatten()
 }
 
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VdevConfig {
     pub path: String,
     pub is_log: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PoolConfig {
     pub name: String,
     pub guid: u64,
