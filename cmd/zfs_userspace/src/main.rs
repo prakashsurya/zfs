@@ -1,3 +1,5 @@
+mod zfsioctl;
+
 use clap::Parser;
 use std::fs::File;
 
