@@ -103,11 +103,16 @@ fn main() -> std::io::Result<()> {
             let prop = UserQuotaProp::UserUsed;
             for useracct in zfs_userspace(_file.as_raw_fd(), &dataset, prop) {
                 //writeln!(std::io::stdout(), "{useracct:?}")?;
+                let space = if parseable {
+                    useracct.space.to_string()
+                } else {
+                    format!("{:.1} GB", useracct.space as f64 / 1024.0 / 1024.0 / 1024.0)
+                };
                 writeln!(
                     std::io::stdout(),
                     "{}: {}",
                     useracct.name_string(prop.name_type(), !prtnum),
-                    useracct.space,
+                    space,
                 )?;
             }
         }
