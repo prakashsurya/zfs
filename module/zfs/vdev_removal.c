@@ -175,6 +175,16 @@ uint_t vdev_removal_max_span = 32 * 1024;
  */
 static int zfs_removal_suspend_progress = 0;
 
+/*
+ * Test-only tunables for exercising the export/removal race.
+ * zfs_removal_complete_delay_ms parks the removal thread between its two
+ * config-lock phases; zfs_removal_in_complete is a read-only flag the test
+ * polls to know the thread has parked.  See also zfs_export_complete_delay_ms
+ * in spa.c.
+ */
+static uint_t zfs_removal_complete_delay_ms = 0;
+static int zfs_removal_in_complete = 0;
+
 #define	VDEV_REMOVAL_ZAP_OBJS	"lzap"
 
 static __attribute__((noreturn)) void spa_vdev_remove_thread(void *arg);
@@ -1455,6 +1465,13 @@ vdev_remove_complete(spa_t *spa)
 	 */
 	ASSERT0(vd->vdev_leaf_zap);
 
+	/* Test injection point for the export/removal race. */
+	if (zfs_removal_complete_delay_ms != 0) {
+		zfs_removal_in_complete = 1;
+		delay(MSEC_TO_TICK(zfs_removal_complete_delay_ms));
+		zfs_removal_in_complete = 0;
+	}
+
 	/* Update the vdev labels and dirty the config. */
 	txg = spa_vdev_config_enter(spa);
 	(void) vdev_label_init(vd, 0, VDEV_LABEL_REMOVE);
@@ -2608,6 +2625,14 @@ ZFS_MODULE_PARAM(zfs_vdev, vdev_, removal_max_span, UINT, ZMOD_RW,
 ZFS_MODULE_PARAM(zfs_vdev, zfs_, removal_suspend_progress, UINT, ZMOD_RW,
 	"Pause device removal after this many bytes are copied "
 	"(debug use only - causes removal to hang)");
+
+ZFS_MODULE_PARAM(zfs_vdev, zfs_, removal_complete_delay_ms, UINT, ZMOD_RW,
+	"Pause between the two spa_vdev_enter() calls in "
+	"vdev_remove_complete() for this many ms (debug/test use only)");
+
+ZFS_MODULE_PARAM(zfs_vdev, zfs_, removal_in_complete, INT, ZMOD_RD,
+	"Set while the removal thread is parked in the "
+	"removal_complete_delay_ms window (debug/test use only)");
 
 EXPORT_SYMBOL(free_from_removing_vdev);
 EXPORT_SYMBOL(spa_removal_get_stats);

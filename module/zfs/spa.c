@@ -3032,6 +3032,13 @@ static uint_t spa_load_verify_shift = 4;
 static int spa_load_verify_metadata = B_TRUE;
 static int spa_load_verify_data = B_TRUE;
 
+/*
+ * Test-only: hold spa_export_common() for this many ms after setting
+ * spa_export_thread, to widen the window for the export-vs-removal-completion
+ * race (see zfs_removal_complete_delay_ms in vdev_removal.c).
+ */
+static uint_t zfs_export_complete_delay_ms = 0;
+
 static int
 spa_load_verify_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
     const zbookmark_phys_t *zb, const dnode_phys_t *dnp, void *arg)
@@ -7793,6 +7800,10 @@ spa_export_common(const char *pool, int new_state, nvlist_t **oldconfig,
 	 * that we are finshed.
 	 */
 
+	/* Test injection point for the export/removal race. */
+	if (zfs_export_complete_delay_ms != 0)
+		delay(MSEC_TO_TICK(zfs_export_complete_delay_ms));
+
 	if (spa->spa_sync_on) {
 		vdev_t *rvd = spa->spa_root_vdev;
 		/*
@@ -11851,6 +11862,10 @@ ZFS_MODULE_PARAM(zfs_spa, spa_, note_txg_time, UINT, ZMOD_RW,
 ZFS_MODULE_PARAM(zfs_spa, spa_, flush_txg_time, UINT, ZMOD_RW,
 	"How frequently the TXG timestamps database should be flushed "
 	"to disk (in seconds)");
+
+ZFS_MODULE_PARAM(zfs, zfs_, export_complete_delay_ms, UINT, ZMOD_RW,
+	"Pause in spa_export_common() after setting spa_export_thread for this "
+	"many ms (debug/test use only)");
 
 #ifdef _KERNEL
 ZFS_MODULE_VIRTUAL_PARAM_CALL(zfs_zio, zio_, taskq_read,
