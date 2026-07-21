@@ -15,6 +15,9 @@ jobs:
     - uses: actions/checkout@v6
       with:
         ref: ${{ github.event.pull_request.head.sha }}
+    - name: Install git-utils
+      run: |
+        git clone git@github.com:delphix/git-utils.git
     - name: Install dependencies
       run: |
         # for x in lxd core20 snapd; do sudo snap remove $x; done
